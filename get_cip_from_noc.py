@@ -79,4 +79,7 @@ def get_cip_codes(noc_code):
 # pd.Series(sorted(matching_cips), name="Matching CIP Codes").to_csv("matched_cips.csv", index=False)
 # print("💾 Saved results to matched_cips.csv")
 
-print(get_cip_codes(21231))
+#print(get_cip_codes(21231))
+
+if __name__ == "__main__":
+    main()

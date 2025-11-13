@@ -1,14 +1,15 @@
 import pandas as pd
 from get_cip_from_noc import get_cip_codes
 from rapidfuzz import fuzz, process
+from collections import defaultdict
 
 
 def get_highschool_categories(noc_code):
     cip_list = get_cip_codes(noc_code)
     highschool_csvs = ["highschool_closed_courses.csv", "highschool_open_courses.csv"]
 
-    matching_main_cats = set()
-    matching_sub_cats = set()
+    matching_courses = set()
+    main_to_subs = defaultdict(set)
     matching_courses = set()
 
     for file in highschool_csvs:
@@ -27,121 +28,130 @@ def get_highschool_categories(noc_code):
                     course_name = row.iloc[0]["Course Title"]
                     main_cat = row.iloc[0]["HST Main Category"]
                     sub_cat = row.iloc[0]["HST Sub Category"]
-                    if course_name not in matching_courses:
-                        matching_courses.add(course_name)
-                    if main_cat not in matching_main_cats:
-                        matching_main_cats.add(main_cat)
-                    if sub_cat not in matching_sub_cats:
-                        matching_sub_cats.add(sub_cat)
+                    matching_courses.add(course_name)
+                    main_to_subs[main_cat].add(sub_cat)
+    main_to_subs = {
+        main: sorted(subs) for main, subs in main_to_subs.items()
+    }
 
-    return [list(matching_courses), list(matching_main_cats), list(matching_sub_cats)]
+    return matching_courses, main_to_subs
 
-def highschool_bucket_mapping(main_cats):
+def highschool_bucket_mapping(main_to_subs):
     hst_to_bucket = {
         # 1️⃣ AGRICULTURE / ENVIRONMENT
-        "01 AGRIBUSINESS AND AGRICULTURAL PRODUCTION": "Agriculture & Environment",
-        "02 AGRICULTURAL SCIENCES": "Agriculture & Environment",
-        "03 RENEWABLE NATURAL RESOURCES": "Agriculture & Environment",
+        "01 AGRIBUSINESS AND AGRICULTURAL PRODUCTION": "Agriculture",
+        "02 AGRICULTURAL SCIENCES": "Agriculture",
+        "03 RENEWABLE NATURAL RESOURCES": "Agriculture",
 
         # 2️⃣ ARCHITECTURE / ENGINEERING / TRADES
-        "04 ARCHITECTURE AND ENVIRONMENTAL DESIGN": "Engineering & Trades",
-        "14 ENGINEERING": "Engineering & Trades",
-        "15 ENGINEERING AND ENGINEERING-RELATED TECHNOLOGIES": "Engineering & Trades",
-        "46 CONSTRUCTION TRADES": "Engineering & Trades",
-        "47 MECHANICS AND REPAIRERS": "Engineering & Trades",
-        "48 PRECISION PRODUCTION": "Engineering & Trades",
-        "49 TRANSPORTATION AND MATERIAL MOVING": "Engineering & Trades",
-        "21 INDUSTRIAL ARTS": "Engineering & Trades",
+        "04 ARCHITECTURE AND ENVIRONMENTAL DESIGN": "Engineering",
+        "14 ENGINEERING": "Engineering",
+        "15 ENGINEERING AND ENGINEERING-RELATED TECHNOLOGIES": "Engineering",
+        "46 CONSTRUCTION TRADES": "Engineering",
+        "47 MECHANICS AND REPAIRERS": "Engineering",
+        "48 PRECISION PRODUCTION": "Engineering",
+        "49 TRANSPORTATION AND MATERIAL MOVING": "Engineering",
+        "21 INDUSTRIAL ARTS": "Engineering",
 
         # 3️⃣ ARTS / DESIGN / HUMANITIES
-        "05 AREA AND ETHNIC STUDIES": "Arts, Design & Humanities",
-        "50 VISUAL AND PERFORMING ARTS": "Arts, Design & Humanities",
-        "38 PHILOSOPY AND RELIGION": "Arts, Design & Humanities",
-        "04 ARCHITECTURE AND ENVIRONMENTAL DESIGN": "Arts, Design & Humanities",  # overlaps okay
+        "05 AREA AND ETHNIC STUDIES": "Arts",
+        "50 VISUAL AND PERFORMING ARTS": "Arts",
+        "38 PHILOSOPY AND RELIGION": "Arts",
+        "04 ARCHITECTURE AND ENVIRONMENTAL DESIGN": "Arts",  # overlaps okay
 
         # 4️⃣ BUSINESS / COMMERCE / MANAGEMENT
-        "06 BUSINESS AND MANAGEMENT": "Business & Commerce",
-        "07 BUSINESS AND OFFICE": "Business & Commerce",
-        "08 MARKETING AND DISTRIBUTION": "Business & Commerce",
-        "52 GENERAL (INCLUDING PRE-VOCATIONAL PROGRAMS) EMH": "Business & Commerce",
+        "06 BUSINESS AND MANAGEMENT": "Business",
+        "07 BUSINESS AND OFFICE": "Business",
+        "08 MARKETING AND DISTRIBUTION": "Business",
+        "52 GENERAL (INCLUDING PRE-VOCATIONAL PROGRAMS) EMH": "Business",
 
         # 5️⃣ COMMUNICATIONS / MEDIA / TECHNOLOGY
-        "09 COMMUNICATIONS": "Communications & Media",
-        "10 COMMUNICATION TECHNOLOGIES": "Communications & Media",
-        "11 COMPUTER AND INFORMATION SCIENCES": "Communications & Media",
+        "09 COMMUNICATIONS": "Communications",
+        "10 COMMUNICATION TECHNOLOGIES": "Communications",
+        "11 COMPUTER AND INFORMATION SCIENCES": "Communications",
 
         # 6️⃣ CONSUMER / PERSONAL / HOME ECONOMICS
-        "12 CONSUMER, PERSONAL, AND MISCELLANEOUS SERVICES": "Home Economics & Life Skills",
-        "19 HOME ECONOMICS.": "Home Economics & Life Skills",
-        "20 VOCATIONAL HOME ECONOMICS": "Home Economics & Life Skills",
-        "37 PERSONAL AWARENESS.": "Home Economics & Life Skills",
+        "12 CONSUMER, PERSONAL, AND MISCELLANEOUS SERVICES": "Home Economics",
+        "19 HOME ECONOMICS.": "Home Economics",
+        "20 VOCATIONAL HOME ECONOMICS": "Home Economics",
+        "37 PERSONAL AWARENESS.": "Home Economics",
 
         # 7️⃣ EDUCATION / BASIC SKILLS
-        "13 EDUCATION": "Education & Basic Skills",
-        "32 BASIC SKILLS": "Education & Basic Skills",
+        "13 EDUCATION": "General",
+        "32 BASIC SKILLS": "General",
 
         # 8️⃣ FOREIGN LANGUAGES / ENGLISH / COMMUNICATION
-        "16 FOREIGN LANGUAGES": "Languages & Literature",
-        "23 LETTERS/ENGLISH": "Languages & Literature",
+        "16 FOREIGN LANGUAGES": "Languages",
+        "23 LETTERS/ENGLISH": "Languages",
 
         # 9️⃣ HEALTH / LIFE SCIENCES
-        "17 ALLIED HEALTH": "Health & Life Sciences",
-        "18 HEALTH SCIENCES": "Health & Life Sciences",
-        "26 LIFE SCIENCES": "Health & Life Sciences",
-        "34 HEALTH RELATED ACTIVITIES": "Health & Life Sciences",
+        "17 ALLIED HEALTH": "Health",
+        "18 HEALTH SCIENCES": "Health",
+        "26 LIFE SCIENCES": "Health",
+        "34 HEALTH RELATED ACTIVITIES": "Health",
 
         # 🔟 MATHEMATICS / SCIENCE / TECHNOLOGY
-        "27 MATHEMATICS": "Science, Technology, Engineering & Math (STEM)",
-        "40 PHYSICAL SCIENCES": "Science, Technology, Engineering & Math (STEM)",
-        "41 SCIENCE TECHNOLOGIES": "Science, Technology, Engineering & Math (STEM)",
-        "30 MULTI/INTERDISCIPLINARY STUDIES": "Science, Technology, Engineering & Math (STEM)",
+        "27 MATHEMATICS": "STEM",
+        "40 PHYSICAL SCIENCES": "STEM",
+        "41 SCIENCE TECHNOLOGIES": "STEM",
+        "30 MULTI/INTERDISCIPLINARY STUDIES": "STEM",
 
         # 11️⃣ SOCIAL SCIENCES / LAW / CIVICS
-        "22 LAW": "Social Sciences & Civics",
-        "24 LIBERAL/GENERAL STUDIES": "Social Sciences & Civics",
-        "28 MILITARY SCIENCES": "Social Sciences & Civics",
-        "33 CITIZENSHIP/CIVIC ACTIVITIES": "Social Sciences & Civics",
-        "35 INTERPERSONAL SKILLS": "Social Sciences & Civics",
-        "42 PSYCHOLOGY": "Social Sciences & Civics",
-        "43 PROTECTIVE SERVICES": "Social Sciences & Civics",
-        "45 SOCIAL SCIENCES": "Social Sciences & Civics",
+        "22 LAW": "Social Studies",
+        "24 LIBERAL/GENERAL STUDIES": "Social Studies",
+        "28 MILITARY SCIENCES": "Social Studies",
+        "33 CITIZENSHIP/CIVIC ACTIVITIES": "Social Studies",
+        "35 INTERPERSONAL SKILLS": "Social Studies",
+        "42 PSYCHOLOGY": "Social Studies",
+        "43 PROTECTIVE SERVICES": "Social Studies",
+        "45 SOCIAL SCIENCES": "Social Studies",
 
         # 12️⃣ PHYSICAL EDUCATION / RECREATION
-        "31 PARKS AND RECREATION": "Physical Education & Recreation",
-        "36 LEISURE AND RECREATIONAL ACTIVITIES": "Physical Education & Recreation",
+        "31 PARKS AND RECREATION": "Physical Education",
+        "36 LEISURE AND RECREATIONAL ACTIVITIES": "Physical Education",
 
         # SPECIAL EDUCATION catch-all
-        "54 SPECIAL EDUCATION -": "Special Education & Support",
-        "56 SPECIAL EDUCATION - RESOURCE CURRICULUM - SUBJECT AREA SERVICES": "Special Education & Support",
+        "54 SPECIAL EDUCATION -": "Special Education",
+        "56 SPECIAL EDUCATION - RESOURCE CURRICULUM - SUBJECT AREA SERVICES": "Special Education",
     }
+    example_buckets = ["Agriculture", "Engineering", "Arts", "Business", "Communications", "Home Economics", "General",
+                       "Languages", "Health", "STEM", "Social Studies", "Physical Education", "Special Education"]
     final_buckets = set()
-    for category in main_cats:
-        bucket = hst_to_bucket.get(category)
-        if bucket not in final_buckets:
-            final_buckets.add(bucket)
+    buckets_count = [0] * len(example_buckets)
+    subcats_by_bucket = [[] for _ in example_buckets]
 
-    return final_buckets
+    for main_cat, subcats in main_to_subs.items():
+        bucket = hst_to_bucket.get(main_cat)
+        if not bucket:
+            continue
+
+        final_buckets.add(bucket)
+        idx = example_buckets.index(bucket)
+        buckets_count[idx] = 1
+
+        for sub_cat in subcats:
+            if sub_cat not in subcats_by_bucket[idx]:
+                subcats_by_bucket[idx].append(sub_cat[3:])
+
+    return final_buckets, buckets_count, subcats_by_bucket
 
 
 highschool_data = get_highschool_categories(21231)
 
-buckets = highschool_bucket_mapping(highschool_data[1])
+buckets, counts, subcats = highschool_bucket_mapping(highschool_data[1])
 
 print("\nFinal High School Buckets")
 for bucket in buckets:
     print(bucket)
 
-# List of Buckets for formating front end:
-# Agriculture & Environment
-# Engineering & Trades
-# Arts, Design & Humanities
-# Business & Commerce
-# Communications & Media
-# Home Economics & Life Skills
-# Education & Basic Skills
-# Languages & Literature
-# Health & Life Sciences
-# Science, Technology, Engineering & Math (STEM)
-# Social Sciences & Civics
-# Physical Education & Recreation
-# Special Education & Support
+print("\nBucket Indicators")
+print(counts)
+
+print("\nSub Categories in each bucket")
+for name, subs in zip(
+    ["Agriculture", "Engineering", "Arts", "Business", "Communications",
+     "Home Economics", "General", "Languages", "Health", "STEM",
+     "Social Studies", "Physical Education", "Special Education"],
+    subcats,
+):
+    print(name, "→", subs)
