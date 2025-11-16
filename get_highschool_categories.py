@@ -5,7 +5,8 @@ from collections import defaultdict
 
 
 def get_highschool_categories(noc_code):
-    cip_list = get_cip_codes(noc_code)
+    base_noc = int(str(noc_code).split("-")[0])
+    cip_list = get_cip_codes(base_noc)
     highschool_csvs = ["highschool_closed_courses.csv", "highschool_open_courses.csv"]
 
     matching_courses = set()
@@ -136,7 +137,7 @@ def highschool_bucket_mapping(main_to_subs):
     return final_buckets, buckets_count, subcats_by_bucket
 
 
-highschool_data = get_highschool_categories(21231)
+highschool_data = get_highschool_categories(21231-0)
 
 buckets, counts, subcats = highschool_bucket_mapping(highschool_data[1])
 
